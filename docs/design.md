@@ -1,6 +1,6 @@
 # Media: Design
 
-> **In short:** media holds the images a site's documents use. A group owns each image, and uploading asks Authorisation. Every image is made web-ready on upload: resized, compressed as tightly as it will go, and stripped of location and other metadata. A group may also keep a cleaned full-resolution original, which is private. Alt text is required, and who uploaded it is always recorded. The records live in media's own PostgreSQL schema, and the files in a storage bucket the host passes in. Each group has a storage allowance, set by an entitlement. Agreed with the owner on 25 October 2026, apart from the questions at the end; nothing is built yet.
+> **In short:** media holds the images a site's documents use. A group owns each image, and uploading asks Authorisation. Every image is made web-ready on upload: resized, compressed as tightly as it will go, and stripped of location and other metadata. A group may also keep a cleaned full-resolution original, which is private. Alt text is required, and who uploaded it is always recorded. The records live in media's own PostgreSQL schema, and the files in a storage bucket the host passes in. Each group has a storage allowance, set by an entitlement. Agreed with the owner on 25 October 2026; nothing is built yet.
 
 ## What it is for
 
@@ -17,15 +17,17 @@ content-editor's design ([content-editor](https://github.com/nuxt4-layers/conten
 | Metadata removed | Location, camera and every other metadata is always removed, from web versions and originals alike |
 | Originals off by default | A group whose entitlement allows it keeps a full-resolution original as well. It is cleaned too: a JPEG's metadata is removed without re-encoding, so the picture is untouched; other formats are re-encoded at full size and the highest quality. Originals are never public: they are served through the site to holders of `media.originals:download` |
 | Alt text required | An image cannot be inserted until it has alt text, or is marked decorative on purpose (alt left empty deliberately) |
-| Credit and rights | The uploader confirms they have the right to use the image. A credit line is optional and is shown wherever the image is |
+| Credit and rights | The uploader confirms they have the right to use the image. A credit line is optional for their own photos and required for any image they did not take; it is shown wherever the image is |
+| Photos of children | The uploader confirms that a parent or guardian consented for anyone identifiable under 18; without that confirmation the upload is refused. The confirmation is recorded with the item |
+| Public and private images | Images in public documents have public addresses. Images in members-only content (such as a gallery's members' albums) are served through the site, with an access check on each request, never from a public address |
 | A group owns each image | As with content, an image belongs to a group. Uploading needs `media.items:upload` in that group; using an image in a document needs the right to edit that group's content. All through the shared `decide` shape ([ADR-0012](https://github.com/nuxt4-layers/platform-architecture/blob/249cd48af72e0a3fc232d40c8aa05e8da3b32069/docs/decisions/ADR-0012-trivial-composition.md) §2) |
 | The uploader is always recorded | Each item keeps its uploader's identity identifier, and screens show the uploader's name through Profile. Events and logs carry identifiers only |
-| Allowances by entitlement | media counts each group's storage. Its allowance (total size, keeping originals, the larger upload limit) comes from an entitlement port, defaulting to a free allowance the host sets (100 MB proposed). A paid subscription or an exception, such as always free for islanders, raises it. Until those capabilities exist, the platform's administrators set allowances by hand. Media never handles payment |
+| Allowances by entitlement | media counts each group's storage. Its allowance (total size, keeping originals, and the larger 25 MB upload limit that comes with them) comes from an entitlement port, defaulting to a free allowance of 100 MB per group. A paid subscription or an exception, such as always free for islanders, raises it. Until those capabilities exist, the platform's administrators set allowances by hand. Media never handles payment |
 | Over the allowance, refuse | Uploads beyond the allowance are refused with the use and the limit shown. Nothing is ever deleted for being over: a lowered allowance, such as a lapsed subscription, stops new uploads only |
 | No deletion while in use | Deleting is refused while a document links to the image, and the refusal lists those documents, as with Publisher's `acknowledgedLinks`. Archiving hides an image from the picker without breaking documents that use it |
 | Unused images tidied | An image no document has used within 90 days of upload is listed to its group's administrators for deletion; nothing is removed without them |
 | Erasure leaves a blank | When an image must go (the uploader's or a pictured person's erasure, or a takedown), its files and original are deleted and it answers a blank image, at a new address so that cached copies are not served, with its alt text set to a neutral "Image removed". The `asset:` id still resolves, so documents never break. On the uploader's erasure, their identifier is removed from the record |
-| Reporting an image | Every public image can be reported. A report goes to the group's administrators and the platform's operators, who keep the image or take it down; reports of the most serious kinds (the platform's list) hide it at once while they decide. Reports and decisions are events for the audit capability. This is the first part of the Online Safety Act duties; slice 3 adds the rest |
+| Reporting an image | Every public image can be reported. A report goes to the group's administrators and the platform's operators, who keep the image or take it down; reports of the most serious kinds (the platform's list) hide it at once while they decide. Reports and decisions are events for the audit capability. This comes in version 1, as the first part of the Online Safety Act duties; slice 3 adds the rest |
 | Backups in step | Records and files are backed up together, so a restore never leaves records without files or the reverse. Each erasure is recorded, so a restore applies it again |
 
 ## Permissions
@@ -54,20 +56,11 @@ The owner chose Vercel's storage, Vercel Blob, as near free as possible. Its Hob
 
 ## Not in version 1
 
-Images in members-only content (served through the site with an access check, as originals are), video, documents such as PDFs, AVIF output alongside WebP, blurred placeholders, captions and long descriptions, cropping and focal points, albums, download statistics, and moving between storage providers.
-
-## Open for the owner
-
-Recommended answers, to confirm before the core is built:
-
-1. **Photos of children:** the uploader confirms that anyone identifiable under 18 is shown with a parent's or guardian's consent; without it the upload is refused.
-2. **Reporting now:** the report button and takedown come with version 1, as above, rather than waiting for slice 3.
-3. **Credit:** optional, as above, but required for any image the uploader did not take.
-4. **Free allowance:** 100 MB per group, and 25 MB as the larger upload limit for groups keeping originals.
+Video, documents such as PDFs, AVIF output alongside WebP, blurred placeholders, captions and long descriptions, cropping and focal points, albums, download statistics, and moving between storage providers.
 
 ## Order of work
 
-1. Confirm the Blob store's region, and settle the questions above.
-2. media's core: contract, storage port, direct uploads, processing, records, allowances, Publisher's asset resolver, fakes and tests.
+1. Confirm the Blob store's region.
+2. media's core: contract, storage port, direct uploads, processing, records, allowances, private serving, Publisher's asset resolver, fakes and tests.
 3. Its presentation part: the picker, the library and reports.
 4. `examples/minimal-host`, `CONTRACT.md` and a release; then content-editor builds on it.
